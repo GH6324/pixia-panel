@@ -3,6 +3,7 @@ package main
 import (
 	// Connectors
 	_ "github.com/go-gost/x/connector/direct"
+	_ "github.com/go-gost/x/connector/http"
 	_ "github.com/go-gost/x/connector/relay"
 
 	// Dialers
