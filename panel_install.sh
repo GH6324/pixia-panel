@@ -35,9 +35,7 @@ check_docker() {
 }
 
 check_ipv6_support() {
-  if ip -6 addr show | grep -v "scope link" | grep -q "inet6"; then
-    return 0
-  elif ifconfig 2>/dev/null | grep -v "fe80:" | grep -q "inet6"; then
+  if curl -6 -s --max-time 5 https://6.ipw.cn | grep -Eq '^[0-9a-fA-F:]+$'; then
     return 0
   else
     return 1
