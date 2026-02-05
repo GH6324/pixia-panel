@@ -111,7 +111,7 @@ export default function IndexPage() {
         if (pendingLogin) {
           setPendingLogin(false);
           setLoading(true);
-          performLogin();
+          performLogin(token);
         }
       },
       'error-callback': () => {
@@ -152,15 +152,14 @@ export default function IndexPage() {
   };
 
   // 执行登录请求
-  const performLogin = async () => {
-
-
+  const performLogin = async (tokenOverride?: string) => {
     try {
+      const turnstileToken = tokenOverride ?? form.turnstileToken;
       const loginData: LoginData = {
         username: form.username.trim(),
         password: form.password,
         captchaId: form.captchaId,
-        turnstileToken: form.turnstileToken,
+        turnstileToken: turnstileToken,
       };
 
       const response = await login(loginData);
