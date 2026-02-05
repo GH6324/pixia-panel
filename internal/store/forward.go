@@ -12,6 +12,7 @@ type ForwardWithTunnel struct {
 	TunnelType int64  `json:"tunnelType"`
 	InNodeID   int64  `json:"inNodeId"`
 	OutNodeID  int64  `json:"outNodeId"`
+	InIP       string `json:"inIp"`
 }
 
 func (s *Store) GetForwardByID(ctx context.Context, id int64) (*Forward, error) {
@@ -21,7 +22,7 @@ func (s *Store) GetForwardByID(ctx context.Context, id int64) (*Forward, error) 
 
 func (s *Store) ListForwardsByUser(ctx context.Context, userID int64) ([]ForwardWithTunnel, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT f.id, f.user_id, f.user_name, f.name, f.tunnel_id, f.in_port, f.out_port, f.remote_addr, f.strategy, f.interface_name, f.in_flow, f.out_flow, f.created_time, f.updated_time, f.status, f.inx, f.lifecycle,
-		t.name, t.type, t.in_node_id, t.out_node_id
+		t.name, t.type, t.in_node_id, t.out_node_id, t.in_ip
 		FROM forward f JOIN tunnel t ON f.tunnel_id = t.id WHERE f.user_id = ? ORDER BY f.inx, f.id`, userID)
 	if err != nil {
 		return nil, err
@@ -33,7 +34,7 @@ func (s *Store) ListForwardsByUser(ctx context.Context, userID int64) ([]Forward
 
 func (s *Store) ListForwardsAll(ctx context.Context) ([]ForwardWithTunnel, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT f.id, f.user_id, f.user_name, f.name, f.tunnel_id, f.in_port, f.out_port, f.remote_addr, f.strategy, f.interface_name, f.in_flow, f.out_flow, f.created_time, f.updated_time, f.status, f.inx, f.lifecycle,
-		t.name, t.type, t.in_node_id, t.out_node_id
+		t.name, t.type, t.in_node_id, t.out_node_id, t.in_ip
 		FROM forward f JOIN tunnel t ON f.tunnel_id = t.id ORDER BY f.inx, f.id`)
 	if err != nil {
 		return nil, err
@@ -146,7 +147,7 @@ func scanForwardWithTunnelRows(rows *sql.Rows) ([]ForwardWithTunnel, error) {
 		var outPort sql.NullInt64
 		var iface sql.NullString
 		if err := rows.Scan(&fw.ID, &fw.UserID, &fw.UserName, &fw.Name, &fw.TunnelID, &fw.InPort, &outPort, &fw.RemoteAddr, &fw.Strategy, &iface, &fw.InFlow, &fw.OutFlow, &fw.CreatedTime, &fw.UpdatedTime, &fw.Status, &fw.Inx, &fw.Lifecycle,
-			&fw.TunnelName, &fw.TunnelType, &fw.InNodeID, &fw.OutNodeID); err != nil {
+			&fw.TunnelName, &fw.TunnelType, &fw.InNodeID, &fw.OutNodeID, &fw.InIP); err != nil {
 			return nil, err
 		}
 		if outPort.Valid {
