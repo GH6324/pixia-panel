@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -13,7 +14,8 @@ func (s *Store) GetNodeByID(ctx context.Context, id int64) (*Node, error) {
 }
 
 func (s *Store) GetNodeBySecret(ctx context.Context, secret string) (*Node, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, name, secret, ip, server_ip, port_sta, port_end, version, http, tls, socks, created_time, updated_time, status FROM node WHERE secret = ?`, secret)
+	secret = strings.TrimSpace(secret)
+	row := s.db.QueryRowContext(ctx, `SELECT id, name, secret, ip, server_ip, port_sta, port_end, version, http, tls, socks, created_time, updated_time, status FROM node WHERE lower(secret) = lower(?)`, secret)
 	return scanNode(row)
 }
 

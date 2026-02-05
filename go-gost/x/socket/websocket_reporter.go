@@ -6,8 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync" // 新增：用于管理连接状态的互斥锁
@@ -21,7 +23,6 @@ import (
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 	psnet "github.com/shirou/gopsutil/v3/net"
-	"os"
 )
 
 // SystemInfo 系统信息结构体
@@ -202,6 +203,7 @@ func (w *WebSocketReporter) connect() error {
 	type LocalConfig struct {
 		Addr   string `json:"addr"`
 		Secret string `json:"secret"`
+		WsPath string `json:"ws_path"`
 		Http   int    `json:"http"`
 		Tls    int    `json:"tls"`
 		Socks  int    `json:"socks"`
@@ -212,8 +214,37 @@ func (w *WebSocketReporter) connect() error {
 		json.Unmarshal(b, &cfg)
 	}
 
+	addr := w.addr
+	secret := w.secret
+	wsPath := "/system-info"
+	if cfg.Addr != "" {
+		addr = cfg.Addr
+	}
+	if cfg.Secret != "" {
+		secret = cfg.Secret
+	}
+	if cfg.WsPath != "" {
+		wsPath = cfg.WsPath
+	}
+	secret = strings.TrimSpace(secret)
+
+	scheme := "ws"
+	rawAddr := addr
+	if strings.HasPrefix(rawAddr, "https://") {
+		scheme = "wss"
+		rawAddr = strings.TrimPrefix(rawAddr, "https://")
+	} else if strings.HasPrefix(rawAddr, "http://") {
+		rawAddr = strings.TrimPrefix(rawAddr, "http://")
+	}
+	if idx := strings.Index(rawAddr, "/"); idx != -1 {
+		if wsPath == "/system-info" {
+			wsPath = "/" + strings.TrimLeft(rawAddr[idx+1:], "/")
+		}
+		rawAddr = rawAddr[:idx]
+	}
+
 	// 使用最新的配置重新构建 URL
-	currentURL := "ws://" + w.addr + "/system-info?type=1&secret=" + w.secret + "&version=" + w.version +
+	currentURL := scheme + "://" + rawAddr + wsPath + "?type=1&secret=" + secret + "&version=" + w.version +
 		"&http=" + strconv.Itoa(cfg.Http) + "&tls=" + strconv.Itoa(cfg.Tls) + "&socks=" + strconv.Itoa(cfg.Socks)
 
 	u, err := url.Parse(currentURL)
@@ -224,8 +255,17 @@ func (w *WebSocketReporter) connect() error {
 	dialer := websocket.DefaultDialer
 	dialer.HandshakeTimeout = 10 * time.Second
 
-	conn, _, err := dialer.Dial(u.String(), nil)
+	conn, resp, err := dialer.Dial(u.String(), nil)
 	if err != nil {
+		if resp != nil {
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+			msg := strings.TrimSpace(string(body))
+			if msg == "" {
+				msg = resp.Status
+			}
+			return fmt.Errorf("连接WebSocket失败: %v (HTTP %d: %s)", err, resp.StatusCode, msg)
+		}
 		return fmt.Errorf("连接WebSocket失败: %v", err)
 	}
 

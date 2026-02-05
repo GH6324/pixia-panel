@@ -6,11 +6,20 @@ OUT_DIR=${1:-"$ROOT_DIR/dist"}
 
 mkdir -p "$OUT_DIR"
 
+cd "$ROOT_DIR"
+
 echo "🔧 构建 gost-amd64..."
 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o "$OUT_DIR/gost-amd64" .
 
 echo "🔧 构建 gost-arm64..."
 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o "$OUT_DIR/gost-arm64" .
+
+if command -v upx >/dev/null 2>&1; then
+  echo "🧰 UPX 压缩..."
+  upx --best --lzma "$OUT_DIR/gost-amd64" "$OUT_DIR/gost-arm64"
+else
+  echo "⚠️ 未检测到 upx，跳过压缩"
+fi
 
 echo "✅ 构建完成:"
 ls -la "$OUT_DIR" | awk '{print $9}'

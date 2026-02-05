@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -63,12 +62,9 @@ func SetProtocolBlock(httpOn int, tlsOn int, socksOn int) {
 type Option func(opts *options)
 
 func init() {
-	_, err := LoadConfig("config.json")
-	fmt.Println("config.json loaded")
-	if err != nil {
-		log.Fatal(err)
+	if _, err := LoadConfig("config.json"); err == nil {
+		needWrap = isTls+isSocks+isHttp > 0
 	}
-	needWrap = isTls+isSocks+isHttp > 0
 }
 
 func AdmissionOption(admission admission.Admission) Option {
