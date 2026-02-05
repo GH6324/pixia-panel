@@ -45,10 +45,10 @@ interface ConfigItem {
 // 网站配置项定义
 const CONFIG_ITEMS: ConfigItem[] = [
   {
-    key: 'ip',
-    label: '面板后端地址',
-    placeholder: '请输入面板后端IP:PORT',
-    description: '格式“ip:port”,用于对接节点时使用,ip是你安装面板服务器的公网ip,端口是安装脚本内输入的后端端口。不要套CDN,不支持https,通讯数据有加密',
+    key: 'addr',
+    label: '面板地址',
+    placeholder: '例如 https://panel.example.com 或 http://IP:PORT',
+    description: '用于节点对接的面板地址，支持 http/https。单端口部署时填写面板访问地址（与浏览器访问一致）。',
     type: 'input'
   },
   {
@@ -103,7 +103,7 @@ const CONFIG_ITEMS: ConfigItem[] = [
 const getInitialConfigs = (): Record<string, string> => {
   if (typeof window === 'undefined') return {};
   
-  const configKeys = ['app_name', 'captcha_enabled', 'captcha_type', 'ip', 'turnstile_enabled', 'turnstile_site_key', 'turnstile_secret_key'];
+  const configKeys = ['app_name', 'captcha_enabled', 'captcha_type', 'addr', 'turnstile_enabled', 'turnstile_site_key', 'turnstile_secret_key'];
   const initialConfigs: Record<string, string> = {};
   
   try {

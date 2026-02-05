@@ -4,7 +4,7 @@ set -e
 export LANG=en_US.UTF-8
 export LC_ALL=C
 
-PANEL_VERSION="0.2.12"
+PANEL_VERSION="0.3.0"
 REPO="pixia1234/pixia-panel"
 RELEASE_TAG="${PANEL_VERSION}"
 BASE_URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
@@ -120,11 +120,8 @@ delete_self() {
 get_config_params() {
   echo "🔧 请输入配置参数："
 
-  read -p "前端端口（默认 6366）: " FRONTEND_PORT
+  read -p "面板端口（默认 6366）: " FRONTEND_PORT
   FRONTEND_PORT=${FRONTEND_PORT:-6366}
-
-  read -p "后端端口（默认 6365）: " BACKEND_PORT
-  BACKEND_PORT=${BACKEND_PORT:-6365}
 
   read -p "JWT 密钥（默认随机生成）: " JWT_SECRET
   JWT_SECRET=${JWT_SECRET:-$(generate_random)}
@@ -190,7 +187,6 @@ install_panel() {
 
   cat > .env <<ENVEOF
 FRONTEND_PORT=$FRONTEND_PORT
-BACKEND_PORT=$BACKEND_PORT
 JWT_SECRET=$JWT_SECRET
 PIXIA_BACKEND_IMAGE=$PIXIA_BACKEND_IMAGE
 PIXIA_FRONTEND_IMAGE=$PIXIA_FRONTEND_IMAGE

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -19,6 +20,100 @@ var httpReportURL string
 var configReportURL string
 var httpAESCrypto *crypto.AESCrypto // 新增：HTTP上报加密器
 
+type panelAddrInfo struct {
+	scheme   string
+	host     string
+	basePath string
+}
+
+func parsePanelAddr(raw string) panelAddrInfo {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return panelAddrInfo{scheme: "http"}
+	}
+	if strings.Contains(raw, "://") {
+		if u, err := url.Parse(raw); err == nil && u.Host != "" {
+			base := strings.TrimRight(u.Path, "/")
+			if base == "/" {
+				base = ""
+			}
+			return panelAddrInfo{
+				scheme:   strings.ToLower(u.Scheme),
+				host:     u.Host,
+				basePath: base,
+			}
+		}
+		parts := strings.SplitN(raw, "://", 2)
+		if len(parts) == 2 && parts[1] != "" {
+			raw = parts[1]
+		}
+	}
+	host := raw
+	basePath := ""
+	if idx := strings.Index(raw, "/"); idx != -1 {
+		host = raw[:idx]
+		basePath = strings.TrimRight(raw[idx:], "/")
+	}
+	return panelAddrInfo{scheme: "http", host: normalizeHost(host), basePath: basePath}
+}
+
+func normalizeHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.HasPrefix(raw, "[") {
+		return raw
+	}
+	if strings.Count(raw, ":") >= 2 {
+		idx := strings.LastIndex(raw, ":")
+		port := raw[idx+1:]
+		if isAllDigits(port) {
+			host := raw[:idx]
+			return "[" + host + "]:" + port
+		}
+		return "[" + raw + "]"
+	}
+	return raw
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func httpSchemeFromPanel(scheme string) string {
+	switch strings.ToLower(scheme) {
+	case "https", "wss":
+		return "https"
+	case "http", "ws", "":
+		return "http"
+	default:
+		return "http"
+	}
+}
+
+func joinPath(basePath, subPath string) string {
+	if subPath == "" {
+		return basePath
+	}
+	if !strings.HasPrefix(subPath, "/") {
+		subPath = "/" + subPath
+	}
+	if basePath == "" || basePath == "/" {
+		return subPath
+	}
+	basePath = strings.TrimRight(basePath, "/")
+	return basePath + subPath
+}
+
 // TrafficReportItem 流量报告项（压缩格式）
 type TrafficReportItem struct {
 	N string `json:"n"` // 服务名（name缩写）
@@ -27,8 +122,27 @@ type TrafficReportItem struct {
 }
 
 func SetHTTPReportURL(addr string, secret string) {
-	httpReportURL = "http://" + addr + "/flow/upload?secret=" + secret
-	configReportURL = "http://" + addr + "/flow/config?secret=" + secret
+	info := parsePanelAddr(addr)
+	scheme := httpSchemeFromPanel(info.scheme)
+	httpURL := url.URL{
+		Scheme: scheme,
+		Host:   info.host,
+		Path:   joinPath(info.basePath, "/flow/upload"),
+	}
+	httpQuery := httpURL.Query()
+	httpQuery.Set("secret", secret)
+	httpURL.RawQuery = httpQuery.Encode()
+	httpReportURL = httpURL.String()
+
+	configURL := url.URL{
+		Scheme: scheme,
+		Host:   info.host,
+		Path:   joinPath(info.basePath, "/flow/config"),
+	}
+	configQuery := configURL.Query()
+	configQuery.Set("secret", secret)
+	configURL.RawQuery = configQuery.Encode()
+	configReportURL = configURL.String()
 
 	// 创建 AES 加密器
 	var err error

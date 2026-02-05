@@ -86,6 +86,101 @@ type TcpPingResponse struct {
 	RequestId    string  `json:"requestId,omitempty"`
 }
 
+type panelAddrInfo struct {
+	scheme   string
+	host     string
+	basePath string
+}
+
+func parsePanelAddr(raw string) panelAddrInfo {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return panelAddrInfo{scheme: "http"}
+	}
+
+	if strings.Contains(raw, "://") {
+		if u, err := url.Parse(raw); err == nil && u.Host != "" {
+			base := strings.TrimRight(u.Path, "/")
+			if base == "/" {
+				base = ""
+			}
+			return panelAddrInfo{
+				scheme:   strings.ToLower(u.Scheme),
+				host:     u.Host,
+				basePath: base,
+			}
+		}
+		parts := strings.SplitN(raw, "://", 2)
+		if len(parts) == 2 && parts[1] != "" {
+			raw = parts[1]
+		}
+	}
+	host := raw
+	basePath := ""
+	if idx := strings.Index(raw, "/"); idx != -1 {
+		host = raw[:idx]
+		basePath = strings.TrimRight(raw[idx:], "/")
+	}
+	return panelAddrInfo{scheme: "http", host: normalizeHost(host), basePath: basePath}
+}
+
+func normalizeHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.HasPrefix(raw, "[") {
+		return raw
+	}
+	if strings.Count(raw, ":") >= 2 {
+		idx := strings.LastIndex(raw, ":")
+		port := raw[idx+1:]
+		if isAllDigits(port) {
+			host := raw[:idx]
+			return "[" + host + "]:" + port
+		}
+		return "[" + raw + "]"
+	}
+	return raw
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func wsSchemeFromPanel(scheme string) string {
+	switch strings.ToLower(scheme) {
+	case "https", "wss":
+		return "wss"
+	case "http", "ws", "":
+		return "ws"
+	default:
+		return "ws"
+	}
+}
+
+func joinPath(basePath, subPath string) string {
+	if subPath == "" {
+		return basePath
+	}
+	if !strings.HasPrefix(subPath, "/") {
+		subPath = "/" + subPath
+	}
+	if basePath == "" || basePath == "/" {
+		return subPath
+	}
+	basePath = strings.TrimRight(basePath, "/")
+	return basePath + subPath
+}
+
 type WebSocketReporter struct {
 	url            string
 	addr           string // 保存服务器地址
@@ -201,12 +296,12 @@ func (w *WebSocketReporter) connect() error {
 
 	// 重新读取 config.json 获取最新的协议配置
 	type LocalConfig struct {
-		Addr   string `json:"addr"`
-		Secret string `json:"secret"`
-		WsPath string `json:"ws_path"`
-		Http   int    `json:"http"`
-		Tls    int    `json:"tls"`
-		Socks  int    `json:"socks"`
+		Addr      string `json:"addr"`
+		Secret    string `json:"secret"`
+		WsPath    string `json:"ws_path"`
+		Http      int    `json:"http"`
+		Tls       int    `json:"tls"`
+		Socks     int    `json:"socks"`
 	}
 
 	var cfg LocalConfig
@@ -227,29 +322,24 @@ func (w *WebSocketReporter) connect() error {
 		wsPath = cfg.WsPath
 	}
 	secret = strings.TrimSpace(secret)
-
-	scheme := "ws"
-	rawAddr := addr
-	if strings.HasPrefix(rawAddr, "https://") {
-		scheme = "wss"
-		rawAddr = strings.TrimPrefix(rawAddr, "https://")
-	} else if strings.HasPrefix(rawAddr, "http://") {
-		rawAddr = strings.TrimPrefix(rawAddr, "http://")
+	info := parsePanelAddr(addr)
+	if info.host == "" {
+		return fmt.Errorf("面板地址不能为空")
 	}
-	if idx := strings.Index(rawAddr, "/"); idx != -1 {
-		if wsPath == "/system-info" {
-			wsPath = "/" + strings.TrimLeft(rawAddr[idx+1:], "/")
-		}
-		rawAddr = rawAddr[:idx]
-	}
-
-	// 使用最新的配置重新构建 URL
-	currentURL := scheme + "://" + rawAddr + wsPath + "?type=1&secret=" + secret + "&version=" + w.version +
-		"&http=" + strconv.Itoa(cfg.Http) + "&tls=" + strconv.Itoa(cfg.Tls) + "&socks=" + strconv.Itoa(cfg.Socks)
-
-	u, err := url.Parse(currentURL)
-	if err != nil {
-		return fmt.Errorf("解析URL失败: %v", err)
+	scheme := wsSchemeFromPanel(info.scheme)
+	fullPath := joinPath(info.basePath, wsPath)
+	query := url.Values{}
+	query.Set("type", "1")
+	query.Set("secret", secret)
+	query.Set("version", w.version)
+	query.Set("http", strconv.Itoa(cfg.Http))
+	query.Set("tls", strconv.Itoa(cfg.Tls))
+	query.Set("socks", strconv.Itoa(cfg.Socks))
+	u := url.URL{
+		Scheme:   scheme,
+		Host:     info.host,
+		Path:     fullPath,
+		RawQuery: query.Encode(),
 	}
 
 	dialer := websocket.DefaultDialer
@@ -1083,11 +1173,26 @@ func getMemoryInfo() MemoryInfo {
 func StartWebSocketReporterWithConfig(addr string, secret string, http int, tls int, socks int, version string) *WebSocketReporter {
 
 	// 构建初始 WebSocket URL
-	fullURL := "ws://" + addr + "/system-info?type=1&secret=" + secret + "&version=" + version + "&http=" + strconv.Itoa(http) + "&tls=" + strconv.Itoa(tls) + "&socks=" + strconv.Itoa(socks)
+	info := parsePanelAddr(addr)
+	scheme := wsSchemeFromPanel(info.scheme)
+	fullPath := joinPath(info.basePath, "/system-info")
+	query := url.Values{}
+	query.Set("type", "1")
+	query.Set("secret", secret)
+	query.Set("version", version)
+	query.Set("http", strconv.Itoa(http))
+	query.Set("tls", strconv.Itoa(tls))
+	query.Set("socks", strconv.Itoa(socks))
+	fullURL := url.URL{
+		Scheme:   scheme,
+		Host:     info.host,
+		Path:     fullPath,
+		RawQuery: query.Encode(),
+	}
 
-	fmt.Printf("🔗 WebSocket连接URL: %s\n", fullURL)
+	fmt.Printf("🔗 WebSocket连接URL: %s\n", fullURL.String())
 
-	reporter := NewWebSocketReporter(fullURL, secret)
+	reporter := NewWebSocketReporter(fullURL.String(), secret)
 	// 保存 addr, secret, version 供重连时使用
 	reporter.addr = addr
 	reporter.secret = secret

@@ -36,7 +36,7 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	// 验证必要的配置项
 	if config.Addr == "" {
-		return nil, fmt.Errorf("服务器地址不能为空")
+		return nil, fmt.Errorf("面板地址不能为空")
 	}
 
 	return &config, nil

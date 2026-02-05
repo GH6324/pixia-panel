@@ -179,12 +179,12 @@ func (s *Server) handleNodeInstall(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, Err("节点不存在"))
 		return
 	}
-	cfg, err := s.store.GetConfigByName(r.Context(), "ip")
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, Err("请先设置ip"))
+	cfg, err := s.store.GetConfigByName(r.Context(), "addr")
+	if err != nil || strings.TrimSpace(cfg.Value) == "" {
+		writeJSON(w, http.StatusBadRequest, Err("请先设置面板地址"))
 		return
 	}
-	addr := formatServerAddr(cfg.Value)
+	addr := formatPanelAddr(cfg.Value)
 	cmd := "curl -fsSL https://raw.githubusercontent.com/pixia1234/pixia-panel/main/node_install.sh -o ./node_install.sh && chmod +x ./node_install.sh && ./node_install.sh -a " + addr + " -s " + node.Secret
 	writeJSON(w, http.StatusOK, OK(cmd))
 }
@@ -233,7 +233,14 @@ func randomHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-func formatServerAddr(addr string) string {
+func formatPanelAddr(addr string) string {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return ""
+	}
+	if strings.Contains(addr, "://") {
+		return addr
+	}
 	if strings.HasPrefix(addr, "[") {
 		return addr
 	}

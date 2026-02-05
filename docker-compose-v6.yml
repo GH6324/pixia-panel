@@ -11,8 +11,6 @@ services:
       TZ: Asia/Shanghai
     volumes:
       - pixia_data:/data
-    ports:
-      - "${BACKEND_PORT:-6365}:6365"
     networks:
       - pixia-network
     healthcheck:

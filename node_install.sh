@@ -15,7 +15,7 @@ get_architecture() {
   esac
 }
 
-GOST_VERSION="0.2.12"
+GOST_VERSION="0.3.0"
 REPO="pixia1234/pixia-panel"
 RELEASE_TAG="${GOST_VERSION}"
 BASE_URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
@@ -58,7 +58,7 @@ get_config_params() {
     echo "请输入配置参数："
 
     if [[ -z "$SERVER_ADDR" ]]; then
-      read -p "服务器地址(面板IP:6365): " SERVER_ADDR
+      read -p "面板地址: " SERVER_ADDR
     fi
 
     if [[ -z "$SECRET" ]]; then

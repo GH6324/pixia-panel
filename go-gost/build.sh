@@ -8,6 +8,8 @@ mkdir -p "$OUT_DIR"
 
 cd "$ROOT_DIR"
 
+export GOCACHE=${GOCACHE:-/tmp/go-build-gost}
+
 echo "🔧 构建 gost-amd64..."
 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o "$OUT_DIR/gost-amd64" .
 
