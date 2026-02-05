@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"strconv"
+	"time"
 )
 
 func (s *Server) handleOpenAPISubStore(w http.ResponseWriter, r *http.Request) {
@@ -19,9 +20,20 @@ func (s *Server) handleOpenAPISubStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userInfo, err := s.store.GetUserByName(r.Context(), user)
-	if err != nil || userInfo.Pwd != md5Hex(pwd) {
+	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, Err("鉴权失败"))
 		return
+	}
+	ok, upgrade, vErr := verifyPassword(userInfo.Pwd, pwd)
+	if vErr != nil || !ok {
+		writeJSON(w, http.StatusUnauthorized, Err("鉴权失败"))
+		return
+	}
+	if upgrade {
+		if hashed, err := hashPassword(pwd); err == nil {
+			_ = s.store.UpdateUserFields(r.Context(), userInfo.ID, userInfo.User, &hashed, userInfo.Flow, userInfo.Num, userInfo.ExpTime, userInfo.FlowResetTime, userInfo.Status, time.Now().UnixMilli())
+			userInfo.Pwd = hashed
+		}
 	}
 
 	const giga = 1024 * 1024 * 1024

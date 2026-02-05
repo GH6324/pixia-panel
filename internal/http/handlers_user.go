@@ -1,8 +1,6 @@
 package httpapi
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"net/http"
 	"strings"
 	"time"
@@ -91,9 +89,20 @@ func (s *Server) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Pwd != md5Hex(req.Password) {
+	ok, upgrade, err := verifyPassword(user.Pwd, req.Password)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Err("密码校验失败"))
+		return
+	}
+	if !ok {
 		writeJSON(w, http.StatusBadRequest, Err("账号或密码错误"))
 		return
+	}
+	if upgrade {
+		if hashed, err := hashPassword(req.Password); err == nil {
+			_ = s.store.UpdateUserFields(r.Context(), user.ID, user.User, &hashed, user.Flow, user.Num, user.ExpTime, user.FlowResetTime, user.Status, time.Now().UnixMilli())
+			user.Pwd = hashed
+		}
 	}
 	if user.Status == 0 {
 		writeJSON(w, http.StatusBadRequest, Err("账户停用"))
@@ -136,9 +145,14 @@ func (s *Server) handleUserCreate(w http.ResponseWriter, r *http.Request) {
 	if req.Status != nil {
 		status = *req.Status
 	}
+	hashed, err := hashPassword(req.Pwd)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Err("密码处理失败"))
+		return
+	}
 	user := &store.User{
 		User:          req.User,
-		Pwd:           md5Hex(req.Pwd),
+		Pwd:           hashed,
 		RoleID:        1,
 		ExpTime:       req.ExpTime,
 		Flow:          req.Flow,
@@ -199,8 +213,12 @@ func (s *Server) handleUserUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	var pwd *string
 	if req.Pwd != "" {
-		h := md5Hex(req.Pwd)
-		pwd = &h
+		hashed, err := hashPassword(req.Pwd)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, Err("密码处理失败"))
+			return
+		}
+		pwd = &hashed
 	}
 	if err := s.store.UpdateUserFields(r.Context(), req.ID, req.User, pwd, req.Flow, req.Num, req.ExpTime, req.FlowResetTime, status, time.Now().UnixMilli()); err != nil {
 		writeJSON(w, http.StatusInternalServerError, Err("更新失败"))
@@ -271,15 +289,30 @@ func (s *Server) handleUserUpdatePassword(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusBadRequest, Err("用户不存在"))
 		return
 	}
-	if user.Pwd != md5Hex(req.CurrentPassword) {
+	ok, upgrade, err := verifyPassword(user.Pwd, req.CurrentPassword)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Err("密码校验失败"))
+		return
+	}
+	if !ok {
 		writeJSON(w, http.StatusBadRequest, Err("当前密码错误"))
 		return
+	}
+	if upgrade {
+		if hashed, err := hashPassword(req.CurrentPassword); err == nil {
+			_ = s.store.UpdateUserFields(r.Context(), userID, user.User, &hashed, user.Flow, user.Num, user.ExpTime, user.FlowResetTime, user.Status, time.Now().UnixMilli())
+			user.Pwd = hashed
+		}
 	}
 	if existing, err := s.store.GetUserByName(r.Context(), req.NewUsername); err == nil && existing.ID != userID {
 		writeJSON(w, http.StatusBadRequest, Err("用户名已被其他用户使用"))
 		return
 	}
-	newPwd := md5Hex(req.NewPassword)
+	newPwd, err := hashPassword(req.NewPassword)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Err("密码处理失败"))
+		return
+	}
 	if err := s.store.UpdateUserFields(r.Context(), userID, req.NewUsername, &newPwd, user.Flow, user.Num, user.ExpTime, user.FlowResetTime, user.Status, time.Now().UnixMilli()); err != nil {
 		writeJSON(w, http.StatusInternalServerError, Err("账号密码修改失败"))
 		return
@@ -350,11 +383,6 @@ func (s *Server) turnstileConfig(r *http.Request) (bool, string) {
 		secret = cfg.Value
 	}
 	return enabled && secret != "", secret
-}
-
-func md5Hex(val string) string {
-	h := md5.Sum([]byte(val))
-	return hex.EncodeToString(h[:])
 }
 
 func ptrInt64(v int64) *int64 {
