@@ -28,8 +28,9 @@ build_download_url() {
 
 DOWNLOAD_URL=$(build_download_url)
 COUNTRY=$(curl -s https://ipinfo.io/country || true)
+USE_MIRROR=false
 if [ "$COUNTRY" = "CN" ]; then
-  DOWNLOAD_URL="https://ghfast.top/${DOWNLOAD_URL}"
+  USE_MIRROR=true
 fi
 
 show_menu() {
@@ -94,10 +95,23 @@ install_gost() {
   [[ -f "$INSTALL_DIR/gost" ]] && rm -f "$INSTALL_DIR/gost"
 
   echo "⬇️ 下载 gost..."
-  echo "📥 下载地址: $DOWNLOAD_URL"
-  if ! curl -fL "$DOWNLOAD_URL" -o "$INSTALL_DIR/gost"; then
-    echo "❌ 下载失败，请检查网络或下载链接。"
-    exit 1
+  if [ "$USE_MIRROR" = true ]; then
+    MIRROR_URL="https://ghfast.top/${DOWNLOAD_URL}"
+    echo "📥 下载地址: $MIRROR_URL"
+    if ! curl -fL "$MIRROR_URL" -o "$INSTALL_DIR/gost"; then
+      echo "⚠️ 镜像下载失败，尝试直接从 GitHub 下载..."
+      echo "📥 下载地址: $DOWNLOAD_URL"
+      if ! curl -fL "$DOWNLOAD_URL" -o "$INSTALL_DIR/gost"; then
+        echo "❌ 下载失败，请检查网络或下载链接。"
+        exit 1
+      fi
+    fi
+  else
+    echo "📥 下载地址: $DOWNLOAD_URL"
+    if ! curl -fL "$DOWNLOAD_URL" -o "$INSTALL_DIR/gost"; then
+      echo "❌ 下载失败，请检查网络或下载链接。"
+      exit 1
+    fi
   fi
   if [[ ! -f "$INSTALL_DIR/gost" || ! -s "$INSTALL_DIR/gost" ]]; then
     echo "❌ 下载失败，请检查网络或下载链接。"

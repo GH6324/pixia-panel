@@ -12,9 +12,9 @@ DOCKER_COMPOSEV4_URL="${BASE_URL}/docker-compose-v4.yml"
 DOCKER_COMPOSEV6_URL="${BASE_URL}/docker-compose-v6.yml"
 
 COUNTRY=$(curl -s https://ipinfo.io/country || true)
+USE_MIRROR=false
 if [ "$COUNTRY" = "CN" ]; then
-  DOCKER_COMPOSEV4_URL="https://ghfast.top/${DOCKER_COMPOSEV4_URL}"
-  DOCKER_COMPOSEV6_URL="https://ghfast.top/${DOCKER_COMPOSEV6_URL}"
+  USE_MIRROR=true
 fi
 
 check_docker() {
@@ -141,6 +141,7 @@ get_config_params() {
 fetch_compose_file() {
   local url
   local target
+  local download_url
   target="docker-compose.yml"
 
   if check_ipv6_support; then
@@ -160,7 +161,20 @@ fetch_compose_file() {
     return 0
   fi
 
-  curl -L -o "$target" "$url"
+  download_url="$url"
+  if [ "$USE_MIRROR" = true ]; then
+    download_url="https://ghfast.top/${url}"
+  fi
+
+  if ! curl -fL -o "$target" "$download_url"; then
+    echo "⚠️ 下载失败，尝试直接从 GitHub 下载..."
+    curl -fL -o "$target" "$url"
+  fi
+
+  if ! grep -q "^services:" "$target"; then
+    echo "⚠️ 下载内容异常，尝试直接从 GitHub 下载..."
+    curl -fL -o "$target" "$url"
+  fi
 }
 
 install_panel() {
