@@ -19,7 +19,7 @@ curl -L https://raw.githubusercontent.com/pixia1234/pixia-panel/refs/heads/main/
 ```
 curl -L https://raw.githubusercontent.com/pixia1234/pixia-panel/refs/heads/main/node_install.sh -o node_install.sh && chmod +x node_install.sh && ./node_install.sh
 ```
-
+⚠️在公网环境部署节点时，请与面板用**https**通信，否则是明文传输。
 ## 默认管理员账号
 
 账号: admin_user  
