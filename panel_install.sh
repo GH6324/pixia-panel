@@ -7,9 +7,10 @@ export LC_ALL=C
 PANEL_VERSION="0.3.0"
 REPO="pixia1234/pixia-panel"
 RELEASE_TAG="${PANEL_VERSION}"
-BASE_URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
-DOCKER_COMPOSEV4_URL="${BASE_URL}/docker-compose-v4.yml"
-DOCKER_COMPOSEV6_URL="${BASE_URL}/docker-compose-v6.yml"
+RAW_BASE_URL="https://raw.githubusercontent.com/${REPO}/${RELEASE_TAG}"
+DOCKER_COMPOSEV4_URL="${RAW_BASE_URL}/docker-compose-v4.yml"
+DOCKER_COMPOSEV6_URL="${RAW_BASE_URL}/docker-compose-v6.yml"
+RAW_MAIN_URL="https://raw.githubusercontent.com/${REPO}/main"
 
 COUNTRY=$(curl -s https://ipinfo.io/country || true)
 USE_MIRROR=false
@@ -163,12 +164,12 @@ fetch_compose_file() {
 
   if ! curl -fL -o "$target" "$download_url"; then
     echo "⚠️ 下载失败，尝试直接从 GitHub 下载..."
-    curl -fL -o "$target" "$url"
+    curl -fL -o "$target" "$url" || curl -fL -o "$target" "$RAW_MAIN_URL/$(basename "$url")"
   fi
 
   if ! grep -q "^services:" "$target"; then
     echo "⚠️ 下载内容异常，尝试直接从 GitHub 下载..."
-    curl -fL -o "$target" "$url"
+    curl -fL -o "$target" "$url" || curl -fL -o "$target" "$RAW_MAIN_URL/$(basename "$url")"
   fi
 }
 
