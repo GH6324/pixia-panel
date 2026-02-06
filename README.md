@@ -26,23 +26,10 @@ curl -L https://raw.githubusercontent.com/pixia1234/pixia-panel/refs/heads/main/
 密码: admin_user  
 ⚠️ 首次登录后请立即修改默认密码！
 
-
-## 构建节点 gost（发布用）
-
-```
-cd go-gost
-./build.sh
-```
-
-输出文件：
-- `go-gost/dist/gost-amd64`
-- `go-gost/dist/gost-arm64`
-
-发布到 GitHub Release 时，请保持文件名为 `gost-amd64` / `gost-arm64`。
-
 ## 参考与致谢
 
-本项目部署与交互流程参考了原版 flux-panel：https://github.com/bqlpfy/flux-panel
+本项目的部署与交互流程参考原版 flux-panel：https://github.com/bqlpfy/flux-panel。
+在此基础上仅进行了性能优化：将面板内存占用由 600MB 降至约 20MB；同时对 gost 进行了裁剪，使其内存占用进一步减少约一半。
 
 ## 免责声明
 
