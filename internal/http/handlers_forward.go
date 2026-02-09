@@ -447,6 +447,21 @@ func (s *Server) handleForwardUpdateOrder(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusBadRequest, Err("参数错误"))
 		return
 	}
+	role := roleIDFromCtx(r)
+	if role != 0 {
+		userID := userIDFromCtx(r)
+		for _, fw := range req.Forwards {
+			item, err := s.store.GetForwardByID(r.Context(), fw.ID)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, Err("转发不存在"))
+				return
+			}
+			if item.UserID != userID {
+				writeJSON(w, http.StatusForbidden, Err("无权限"))
+				return
+			}
+		}
+	}
 	for _, fw := range req.Forwards {
 		_ = s.store.UpdateForwardOrder(r.Context(), fw.ID, fw.Inx)
 	}
