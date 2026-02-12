@@ -7,10 +7,7 @@ export LC_ALL=C
 PANEL_VERSION="0.3.0"
 REPO="pixia1234/pixia-panel"
 RELEASE_TAG="${PANEL_VERSION}"
-RAW_BASE_URL="https://raw.githubusercontent.com/${REPO}/${RELEASE_TAG}"
-DOCKER_COMPOSEV4_URL="${RAW_BASE_URL}/docker-compose-v4.yml"
-DOCKER_COMPOSEV6_URL="${RAW_BASE_URL}/docker-compose-v6.yml"
-RAW_MAIN_URL="https://raw.githubusercontent.com/${REPO}/main"
+RELEASE_BASE_URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
 
 COUNTRY=$(curl -s https://ipinfo.io/country || true)
 USE_MIRROR=false
@@ -135,42 +132,42 @@ get_config_params() {
 }
 
 fetch_compose_file() {
-  local url
   local target
+  local compose_candidates
+  local compose_name
+  local compose_url
   local download_url
   target="docker-compose.yml"
+  compose_candidates=("docker-compose.yml")
 
   if check_ipv6_support; then
-    url="$DOCKER_COMPOSEV6_URL"
     echo "📡 选择配置文件：docker-compose-v6.yml"
+    compose_candidates=("docker-compose-v6.yml" "docker-compose.yml")
   else
-    url="$DOCKER_COMPOSEV4_URL"
     echo "📡 选择配置文件：docker-compose-v4.yml"
+    compose_candidates=("docker-compose-v4.yml" "docker-compose.yml")
   fi
 
-  if [ -f "./docker-compose-v4.yml" ] || [ -f "./docker-compose-v6.yml" ]; then
-    if check_ipv6_support; then
-      cp ./docker-compose-v6.yml "$target"
-    else
-      cp ./docker-compose-v4.yml "$target"
+  for compose_name in "${compose_candidates[@]}"; do
+    compose_url="${RELEASE_BASE_URL}/${compose_name}"
+    download_url="$compose_url"
+    if [ "$USE_MIRROR" = true ]; then
+      download_url="https://ghfast.top/${compose_url}"
     fi
-    return 0
-  fi
 
-  download_url="$url"
-  if [ "$USE_MIRROR" = true ]; then
-    download_url="https://ghfast.top/${url}"
-  fi
+    if curl -fL -o "$target" "$download_url"; then
+      if grep -q "^services:" "$target"; then
+        return 0
+      fi
+      echo "⚠️ 下载内容异常，尝试下一个配置文件..."
+    else
+      echo "⚠️ 下载 ${compose_name} 失败，尝试下一个配置文件..."
+    fi
+  done
 
-  if ! curl -fL -o "$target" "$download_url"; then
-    echo "⚠️ 下载失败，尝试直接从 GitHub 下载..."
-    curl -fL -o "$target" "$url" || curl -fL -o "$target" "$RAW_MAIN_URL/$(basename "$url")"
-  fi
-
-  if ! grep -q "^services:" "$target"; then
-    echo "⚠️ 下载内容异常，尝试直接从 GitHub 下载..."
-    curl -fL -o "$target" "$url" || curl -fL -o "$target" "$RAW_MAIN_URL/$(basename "$url")"
-  fi
+  echo "❌ 无法从 Release(${RELEASE_TAG}) 下载 docker-compose 文件。"
+  echo "请检查版本是否已发布且包含 docker-compose.yml/docker-compose-v4.yml/docker-compose-v6.yml 资产。"
+  return 1
 }
 
 install_panel() {
