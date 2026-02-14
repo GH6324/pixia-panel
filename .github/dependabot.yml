@@ -1,0 +1,55 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(go)"
+    labels:
+      - "dependencies"
+    groups:
+      go-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/vite-frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:15"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(npm)"
+    labels:
+      - "dependencies"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:30"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(ci)"
+    labels:
+      - "dependencies"
+    groups:
+      github-actions-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
