@@ -26,6 +26,20 @@ build_download_url() {
   echo "${BASE_URL}/gost-${ARCH}"
 }
 
+gost_version_text() {
+  local bin_path=$1
+  local info
+
+  info=$($bin_path -V 2>/dev/null || true)
+  if [[ -n "$info" ]]; then
+    echo "$info"
+    return 0
+  fi
+
+  echo "gost ${GOST_VERSION} ($(get_architecture))"
+  return 0
+}
+
 DOWNLOAD_URL=$(build_download_url)
 COUNTRY=$(curl -s https://ipinfo.io/country || true)
 USE_MIRROR=false
@@ -123,7 +137,7 @@ install_gost() {
   fi
   chmod +x "$INSTALL_DIR/gost"
 
-  echo "🔎 gost 版本：$($INSTALL_DIR/gost -V 2>/dev/null || echo unknown)"
+  echo "🔎 gost 版本：$(gost_version_text "$INSTALL_DIR/gost")"
 
   CONFIG_FILE="$INSTALL_DIR/config.json"
   cat > "$CONFIG_FILE" <<EOF
@@ -202,7 +216,7 @@ update_gost() {
   mv "$INSTALL_DIR/gost.new" "$INSTALL_DIR/gost"
   chmod +x "$INSTALL_DIR/gost"
 
-  echo "🔎 新版本：$($INSTALL_DIR/gost -V 2>/dev/null || echo unknown)"
+  echo "🔎 新版本：$(gost_version_text "$INSTALL_DIR/gost")"
 
   systemctl start gost
   echo "✅ 更新完成，服务已重新启动。"

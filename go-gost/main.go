@@ -98,8 +98,9 @@ func init() {
 	flag.Parse()
 
 	if printVersion {
+		v := normalizedVersion()
 		fmt.Fprintf(os.Stdout, "gost %s (%s %s/%s)\n",
-			version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+			v, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 		os.Exit(0)
 	}
 }
@@ -118,7 +119,7 @@ func main() {
 	log := xlogger.NewLogger()
 	logger.SetDefault(log)
 
-	wsReporter := socket.StartWebSocketReporterWithConfig(config.Addr, config.Secret, config.Http, config.Tls, config.Socks, version)
+	wsReporter := socket.StartWebSocketReporterWithConfig(config.Addr, config.Secret, config.Http, config.Tls, config.Socks, normalizedVersion())
 	defer wsReporter.Stop()
 	service.SetHTTPReportURL(config.Addr, config.Secret)
 
