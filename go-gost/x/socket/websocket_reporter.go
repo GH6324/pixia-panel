@@ -860,7 +860,29 @@ func (w *WebSocketReporter) handleUpdateChain(data interface{}) error {
 		Chain: updateReq.Chain,
 		Data:  updateReq.Data,
 	}
-	return updateChain(req)
+	if err := updateChain(req); err == nil {
+		return nil
+	} else {
+		if !strings.Contains(err.Error(), "not found") {
+			return err
+		}
+
+		chainName := strings.TrimSpace(req.Chain)
+		if chainName == "" {
+			return err
+		}
+		if registry.ChainRegistry().IsRegistered(chainName) {
+			return nil
+		}
+
+		addData := req.Data
+		addData.Name = chainName
+		if addErr := createChain(createChainRequest{Data: addData}); addErr != nil {
+			return fmt.Errorf("update chain failed: %v; fallback add chain failed: %v", err, addErr)
+		}
+
+		return nil
+	}
 }
 
 func (w *WebSocketReporter) handleDeleteChain(data interface{}) error {

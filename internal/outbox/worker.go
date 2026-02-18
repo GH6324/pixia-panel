@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 	"time"
 
 	"pixia-panel/internal/gost"
@@ -26,6 +27,8 @@ type GostMessage struct {
 	Action string          `json:"action"`
 	Data   json.RawMessage `json:"data"`
 }
+
+const commandResponseTimeout = 10 * time.Second
 
 func (w *Worker) Run(ctx context.Context) {
 	ticker := time.NewTicker(w.interval)
@@ -58,11 +61,46 @@ func (w *Worker) processOnce(ctx context.Context) {
 		return
 	}
 
-	if err := w.hub.Send(ctx, msg.NodeID, msg.Action, msg.Data); err != nil {
+	resp, err := w.hub.SendAndWait(ctx, msg.NodeID, msg.Action, msg.Data, commandResponseTimeout)
+	if err != nil {
 		log.Printf("gost send failed: %v", err)
 		_ = w.store.MarkOutboxFailed(ctx, item.ID, w.delay)
 		return
 	}
 
+	if !resp.Success {
+		if shouldAcknowledgeAsSuccess(msg.Action, resp.Message) {
+			_ = w.store.MarkOutboxSuccess(ctx, item.ID)
+			return
+		}
+		log.Printf("gost command failed: action=%s node_id=%d message=%s", msg.Action, msg.NodeID, resp.Message)
+		_ = w.store.MarkOutboxFailed(ctx, item.ID, w.delay)
+		return
+	}
+
 	_ = w.store.MarkOutboxSuccess(ctx, item.ID)
+}
+
+func shouldAcknowledgeAsSuccess(action, message string) bool {
+	a := strings.TrimSpace(action)
+	m := strings.ToLower(strings.TrimSpace(message))
+	if m == "" {
+		return false
+	}
+
+	if strings.HasPrefix(a, "Add") && strings.Contains(m, "already exists") {
+		return true
+	}
+	if strings.HasPrefix(a, "Delete") && strings.Contains(m, "not found") {
+		return true
+	}
+
+	switch a {
+	case "PauseService", "ResumeService":
+		if strings.Contains(m, "not found") {
+			return true
+		}
+	}
+
+	return false
 }
