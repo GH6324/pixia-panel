@@ -21,34 +21,6 @@ curl -L https://raw.githubusercontent.com/pixia1234/pixia-panel/refs/heads/main/
 ```
 ⚠️在公网环境部署节点时，请与面板用**https**通信，否则是明文传输。
 
-## 发版日志
-
-版本变更记录见：`CHANGELOG.md`。
-
-## 架构说明
-
-### 总体架构
-
-- **控制面（Panel）**：`Go + SQLite`，提供用户、节点、隧道、转发、限速、配置等 API。
-- **展示层（Frontend）**：`Vite + React` 构建的前端页面，通过 API 与后端通信。
-- **数据面（Node）**：每台节点运行裁剪后的 `gost`，与面板保持 WebSocket 连接并接收控制指令。
-
-### 关键数据流
-
-1. 节点使用 `secret` 与面板建立 WebSocket 连接，面板维护在线状态并接收节点系统信息。
-2. 管理员/用户在前端发起操作（创建转发、修改隧道等），后端写入 SQLite 并生成对应 gost 指令。
-3. 指令通过 outbox 队列异步下发到节点，降低瞬时失败对业务请求的影响。
-4. 节点回传执行结果/运行状态，前端实时刷新在线状态与监控指标。
-
-### 后端模块概览
-
-- `internal/http`：API 路由、鉴权、中间件、业务处理。
-- `internal/store`：数据库访问层。
-- `internal/gost`：gost 指令构建与 WebSocket Hub。
-- `internal/outbox`：异步消息投递与重试。
-- `internal/tasks`：定时任务（流量统计、到期处理、每日重置）。
-- `migrations`：数据库迁移脚本。
-
 ## 升级方法
 
 ### 一、面板升级（推荐）
