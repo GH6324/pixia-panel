@@ -6,6 +6,7 @@
 [![React](https://img.shields.io/badge/React-18.3+-61DAFB.svg)](https://react.dev/)
 [![SQLite](https://img.shields.io/badge/SQLite-3-003B57.svg)](https://www.sqlite.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+[![Docker Publish](https://github.com/pixia1234/pixia-panel/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/pixia1234/pixia-panel/actions/workflows/docker-publish.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/pixia1234/pixia-panel)](https://goreportcard.com/report/github.com/pixia1234/pixia-panel)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
