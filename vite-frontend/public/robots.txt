@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# 后端接口与实时通道无需索引
+Disallow: /api/
+Disallow: /flow/
+Disallow: /ws
+Disallow: /system-info
