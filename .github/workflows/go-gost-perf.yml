@@ -19,41 +19,72 @@ permissions:
   contents: read
 
 jobs:
-  gost-backend-perf:
-    name: gost-backend-perf
+  iperf3-perf:
+    name: iperf3-perf
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: go-gost/x
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go-gost/x/go.mod
-          cache: true
-          cache-dependency-path: go-gost/x/go.sum
+      - name: Install iperf3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iperf3 jq
 
-      - name: Run backend benchmarks
+      - name: Run TCP benchmark
         run: |
           set -euo pipefail
-          go test ./selector ./routing -run '^$' -bench '^Benchmark' -benchmem -count 3 | tee benchmark.txt
+          iperf3 -s -p 5201 > tcp-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill ${SERVER_PID} >/dev/null 2>&1 || true' EXIT
+          sleep 1
+          iperf3 -c 127.0.0.1 -p 5201 -t 15 -P 4 -J > iperf3-tcp.json
+          kill ${SERVER_PID} >/dev/null 2>&1 || true
+          wait ${SERVER_PID} 2>/dev/null || true
+          trap - EXIT
+
+      - name: Run UDP benchmark
+        run: |
+          set -euo pipefail
+          iperf3 -s -p 5202 > udp-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill ${SERVER_PID} >/dev/null 2>&1 || true' EXIT
+          sleep 1
+          iperf3 -c 127.0.0.1 -p 5202 -u -b 0 -t 15 -J > iperf3-udp.json
+          kill ${SERVER_PID} >/dev/null 2>&1 || true
+          wait ${SERVER_PID} 2>/dev/null || true
+          trap - EXIT
 
       - name: Benchmark summary
         run: |
+          TCP_BPS=$(jq -r '.end.sum_received.bits_per_second // 0' iperf3-tcp.json)
+          UDP_BPS=$(jq -r '.end.sum.bits_per_second // 0' iperf3-udp.json)
+          UDP_LOSS=$(jq -r '.end.sum.lost_percent // 0' iperf3-udp.json)
+
           {
-            echo "## go-gost backend benchmarks"
+            echo "## go-gost backend perf (iperf3)"
             echo
+            echo "- TCP throughput: ${TCP_BPS} bps"
+            echo "- UDP throughput: ${UDP_BPS} bps"
+            echo "- UDP loss: ${UDP_LOSS}%"
+            echo
+            echo "### Raw outputs"
             echo '```text'
-            grep '^Benchmark' benchmark.txt || true
+            echo "TCP:"
+            jq '.end.sum_received' iperf3-tcp.json
+            echo
+            echo "UDP:"
+            jq '.end.sum' iperf3-udp.json
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload benchmark artifact
+      - name: Upload benchmark artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: go-gost-backend-benchmark-${{ github.sha }}
-          path: go-gost/x/benchmark.txt
+          name: iperf3-results-${{ github.sha }}
+          path: |
+            iperf3-tcp.json
+            iperf3-udp.json
+            tcp-server.log
+            udp-server.log
           if-no-files-found: error
