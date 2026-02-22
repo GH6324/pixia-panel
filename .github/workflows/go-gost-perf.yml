@@ -58,7 +58,7 @@ jobs:
           cp "$RUNNER_TEMP/gost-under-test.sha256" "$OUT_DIR/gost-under-test.sha256"
 
           RESULTS_CSV="$OUT_DIR/results.csv"
-          echo "scenario,transport,bps,loss,error" > "$RESULTS_CSV"
+          echo "scenario,transport,mbps,loss,error" > "$RESULTS_CSV"
 
           cat > config.json <<'JSON'
           {
@@ -88,22 +88,24 @@ jobs:
             local json_file="$3"
 
             local bps
+            local mbps
             local loss
             local error
 
             bps=$(jq -r '.end.sum_received.bits_per_second // .end.sum_sent.bits_per_second // .end.sum.bits_per_second // 0' "$json_file")
+            mbps=$(awk -v bps="$bps" 'BEGIN { printf "%.2f", bps/1000000 }')
             loss=$(jq -r '.end.sum.lost_percent // 0' "$json_file")
             error=$(jq -r '.error // ""' "$json_file")
 
             error=${error//,/;}
-            echo "${scenario},${transport},${bps},${loss},${error}" >> "$RESULTS_CSV"
+            echo "${scenario},${transport},${mbps},${loss},${error}" >> "$RESULTS_CSV"
 
             if [[ -n "$error" ]]; then
               echo "[FAIL] ${scenario}/${transport}: ${error}"
               return 1
             fi
 
-            echo "[OK] ${scenario}/${transport}: ${bps} bps"
+            echo "[OK] ${scenario}/${transport}: ${mbps} Mbps"
           }
 
           run_port_forward_tcp() {
@@ -164,7 +166,7 @@ jobs:
             echo
             echo "- Binary SHA256: $(cat "$OUT_DIR/gost-under-test.sha256")"
             echo
-            echo "| Scenario | Transport | Throughput (bps) | Loss (%) | Error |"
+            echo "| Scenario | Transport | Throughput (Mbps) | Loss (%) | Error |"
             echo "|---|---:|---:|---:|---|"
             awk -F',' 'NR>1 { printf "| %s | %s | %s | %s | %s |\n", $1, $2, $3, $4, ($5==""?"-":$5) }' "$RESULTS_CSV"
           } >> "$GITHUB_STEP_SUMMARY"
