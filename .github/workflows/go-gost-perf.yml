@@ -1,0 +1,59 @@
+name: go-gost-perf
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - go-gost/**
+      - .github/workflows/go-gost-perf.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - go-gost/**
+      - .github/workflows/go-gost-perf.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gost-backend-perf:
+    name: gost-backend-perf
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: go-gost/x
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go-gost/x/go.mod
+          cache: true
+          cache-dependency-path: go-gost/x/go.sum
+
+      - name: Run backend benchmarks
+        run: |
+          set -euo pipefail
+          go test ./selector ./routing -run '^$' -bench '^Benchmark' -benchmem -count 3 | tee benchmark.txt
+
+      - name: Benchmark summary
+        run: |
+          {
+            echo "## go-gost backend benchmarks"
+            echo
+            echo '```text'
+            grep '^Benchmark' benchmark.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-gost-backend-benchmark-${{ github.sha }}
+          path: go-gost/x/benchmark.txt
+          if-no-files-found: error
