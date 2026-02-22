@@ -19,72 +19,144 @@ permissions:
   contents: read
 
 jobs:
-  iperf3-perf:
-    name: iperf3-perf
+  gost-forward-tunnel-perf:
+    name: gost-forward-tunnel-perf
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install iperf3
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.7"
+
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y iperf3 jq
+          sudo apt-get install -y iperf3 jq openssl
 
-      - name: Run TCP benchmark
+      - name: Install gost binary
         run: |
           set -euo pipefail
-          iperf3 -s -p 5201 > tcp-server.log 2>&1 &
-          SERVER_PID=$!
-          trap 'kill ${SERVER_PID} >/dev/null 2>&1 || true' EXIT
-          sleep 1
-          iperf3 -c 127.0.0.1 -p 5201 -t 15 -P 4 -J > iperf3-tcp.json
-          kill ${SERVER_PID} >/dev/null 2>&1 || true
-          wait ${SERVER_PID} 2>/dev/null || true
-          trap - EXIT
+          export GOBIN="$HOME/go/bin"
+          mkdir -p "$GOBIN"
+          go install github.com/go-gost/gost/cmd/gost@v0.0.0-20251122144702-340ba32ef0be
+          "$HOME/go/bin/gost" -V
 
-      - name: Run UDP benchmark
+      - name: Run forward and tunnel benchmarks
+        shell: bash
         run: |
           set -euo pipefail
-          iperf3 -s -p 5202 > udp-server.log 2>&1 &
-          SERVER_PID=$!
-          trap 'kill ${SERVER_PID} >/dev/null 2>&1 || true' EXIT
-          sleep 1
-          iperf3 -c 127.0.0.1 -p 5202 -u -b 0 -t 15 -J > iperf3-udp.json
-          kill ${SERVER_PID} >/dev/null 2>&1 || true
-          wait ${SERVER_PID} 2>/dev/null || true
-          trap - EXIT
 
-      - name: Benchmark summary
-        run: |
-          TCP_BPS=$(jq -r '.end.sum_received.bits_per_second // 0' iperf3-tcp.json)
-          UDP_BPS=$(jq -r '.end.sum.bits_per_second // 0' iperf3-udp.json)
-          UDP_LOSS=$(jq -r '.end.sum.lost_percent // 0' iperf3-udp.json)
+          BIN="$HOME/go/bin/gost"
+          OUT_DIR="perf-artifacts"
+          mkdir -p "$OUT_DIR"
+
+          RESULTS_CSV="$OUT_DIR/results.csv"
+          echo "scenario,transport,bps,loss,error" > "$RESULTS_CSV"
+
+          openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes \
+            -keyout "$OUT_DIR/key.pem" -out "$OUT_DIR/cert.pem" \
+            -subj '/CN=localhost' >/dev/null 2>&1
+
+          cleanup_pid() {
+            local pid="${1:-}"
+            if [[ -n "${pid}" ]]; then
+              kill "$pid" >/dev/null 2>&1 || true
+              wait "$pid" 2>/dev/null || true
+            fi
+          }
+
+          collect_result() {
+            local scenario="$1"
+            local transport="$2"
+            local json_file="$3"
+
+            local bps
+            local loss
+            local error
+
+            bps=$(jq -r '.end.sum_received.bits_per_second // .end.sum_sent.bits_per_second // .end.sum.bits_per_second // 0' "$json_file")
+            loss=$(jq -r '.end.sum.lost_percent // 0' "$json_file")
+            error=$(jq -r '.error // ""' "$json_file")
+
+            error=${error//,/;}
+            echo "${scenario},${transport},${bps},${loss},${error}" >> "$RESULTS_CSV"
+
+            if [[ -n "$error" ]]; then
+              echo "[FAIL] ${scenario}/${transport}: ${error}"
+              return 1
+            fi
+
+            echo "[OK] ${scenario}/${transport}: ${bps} bps"
+          }
+
+          run_port_forward_tcp() {
+            local entry_port="23000"
+            local json_file="$OUT_DIR/port-forward-tcp.json"
+
+            "$BIN" -L "tcp://127.0.0.1:${entry_port}/127.0.0.1:5201" >"$OUT_DIR/gost-port-forward.log" 2>&1 &
+            local gost_pid=$!
+            sleep 2
+
+            iperf3 -c 127.0.0.1 -p "$entry_port" -t 15 -P 4 -J >"$json_file" || true
+
+            cleanup_pid "$gost_pid"
+            collect_result "port-forward" "tcp" "$json_file"
+          }
+
+          run_tunnel_case() {
+            local proto="$1"
+            local relay_port="$2"
+            local entry_port="$3"
+            local client_query="${4:-}"
+            local server_query="${5:-}"
+
+            local json_file="$OUT_DIR/tunnel-${proto}.json"
+            local server_log="$OUT_DIR/gost-tunnel-server-${proto}.log"
+            local client_log="$OUT_DIR/gost-tunnel-client-${proto}.log"
+
+            "$BIN" -L "relay+${proto}://127.0.0.1:${relay_port}${server_query}" >"$server_log" 2>&1 &
+            local server_pid=$!
+            sleep 2
+
+            "$BIN" -L "tcp://127.0.0.1:${entry_port}/127.0.0.1:5201" -F "relay+${proto}://127.0.0.1:${relay_port}${client_query}" >"$client_log" 2>&1 &
+            local client_pid=$!
+            sleep 2
+
+            iperf3 -c 127.0.0.1 -p "$entry_port" -t 15 -P 4 -J >"$json_file" || true
+
+            cleanup_pid "$client_pid"
+            cleanup_pid "$server_pid"
+            collect_result "tunnel-forward" "$proto" "$json_file"
+          }
+
+          iperf3 -s -p 5201 >"$OUT_DIR/iperf-target.log" 2>&1 &
+          TARGET_PID=$!
+
+          EXIT_CODE=0
+          run_port_forward_tcp || EXIT_CODE=1
+          run_tunnel_case "tcp" 24001 23001 || EXIT_CODE=1
+          run_tunnel_case "mtcp" 24002 23002 || EXIT_CODE=1
+          run_tunnel_case "tls" 24003 23003 "?secure=false" "?certFile=${OUT_DIR}/cert.pem&keyFile=${OUT_DIR}/key.pem" || EXIT_CODE=1
+          run_tunnel_case "wss" 24004 23004 "?secure=false" "?certFile=${OUT_DIR}/cert.pem&keyFile=${OUT_DIR}/key.pem" || EXIT_CODE=1
+
+          cleanup_pid "$TARGET_PID"
 
           {
-            echo "## go-gost backend perf (iperf3)"
+            echo "## go-gost forward/tunnel perf"
             echo
-            echo "- TCP throughput: ${TCP_BPS} bps"
-            echo "- UDP throughput: ${UDP_BPS} bps"
-            echo "- UDP loss: ${UDP_LOSS}%"
-            echo
-            echo "### Raw outputs"
-            echo '```text'
-            echo "TCP:"
-            jq '.end.sum_received' iperf3-tcp.json
-            echo
-            echo "UDP:"
-            jq '.end.sum' iperf3-udp.json
-            echo '```'
+            echo "| Scenario | Transport | Throughput (bps) | Loss (%) | Error |"
+            echo "|---|---:|---:|---:|---|"
+            awk -F',' 'NR>1 { printf "| %s | %s | %s | %s | %s |\n", $1, $2, $3, $4, ($5==""?"-":$5) }' "$RESULTS_CSV"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload benchmark artifacts
+          exit "$EXIT_CODE"
+
+      - name: Upload perf artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: iperf3-results-${{ github.sha }}
-          path: |
-            iperf3-tcp.json
-            iperf3-udp.json
-            tcp-server.log
-            udp-server.log
+          name: gost-forward-tunnel-perf-${{ github.sha }}
+          path: perf-artifacts
           if-no-files-found: error
