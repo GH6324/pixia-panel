@@ -4,7 +4,7 @@ set -e
 export LANG=en_US.UTF-8
 export LC_ALL=C
 
-PANEL_VERSION="0.3.2"
+PANEL_VERSION="0.3.3"
 REPO="pixia1234/pixia-panel"
 RELEASE_TAG="${PANEL_VERSION}"
 RELEASE_BASE_URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
