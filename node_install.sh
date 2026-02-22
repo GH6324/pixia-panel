@@ -15,7 +15,7 @@ get_architecture() {
   esac
 }
 
-GOST_VERSION="0.3.3"
+GOST_VERSION="0.3.4"
 REPO="pixia1234/pixia-panel"
 RELEASE_TAG="${GOST_VERSION}"
 BASE_URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
