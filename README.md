@@ -6,38 +6,14 @@
 [![React](https://img.shields.io/badge/React-18.3+-61DAFB.svg)](https://react.dev/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
 [![Docker Publish](https://github.com/pixia1234/pixia-panel/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/pixia1234/pixia-panel/actions/workflows/docker-publish.yml)
+[![Dev CI](https://github.com/pixia1234/pixia-panel/actions/workflows/ci-dev.yml/badge.svg?branch=dev)](https://github.com/pixia1234/pixia-panel/actions/workflows/ci-dev.yml)
+[![Release](https://img.shields.io/github/v/release/pixia1234/pixia-panel?display_name=tag)](https://github.com/pixia1234/pixia-panel/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/pixia1234/pixia-panel)](https://goreportcard.com/report/github.com/pixia1234/pixia-panel)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 </div>
 
 基于Gost + Go + SQLite 的转发面板。
-
-## 分支修改流程（dev → main）
-
-建议按以下流程协作，避免主分支被实验性提交污染：
-
-1. 所有日常开发与修复先提交到 `dev`；
-2. `dev` 分支通过 CI（`go vet/test/build` + 前端检查/构建）后再进入发布队列；
-3. 定期从 `dev` 发起 PR 合并到 `main`（建议按周或按里程碑）；
-4. 禁止直接向 `main` 推送代码，只通过 PR 合并。
-
-当前仓库工作流位置：`.github/workflows/ci-dev.yml`。
-
-### 常用命令
-
-```bash
-# 进入开发分支
-git checkout dev
-git pull origin dev
-
-# 开发完成后推送到 dev
-git add .
-git commit -m "feat: your change"
-git push origin dev
-
-# 定期将 dev 合并到 main（建议走 GitHub PR）
-```
 
 ## 部署流程
 
