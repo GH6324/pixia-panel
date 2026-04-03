@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -13,22 +14,29 @@ func Open(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("db path is empty")
 	}
 
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", buildSQLiteDSN(path))
 	if err != nil {
 		return nil, err
 	}
 
-	pragmas := []string{
-		"PRAGMA journal_mode=WAL;",
-		"PRAGMA busy_timeout=5000;",
-		"PRAGMA foreign_keys=ON;",
-	}
-	for _, pragma := range pragmas {
-		if _, err := db.Exec(pragma); err != nil {
-			_ = db.Close()
-			return nil, err
-		}
+	return db, nil
+}
+
+func buildSQLiteDSN(path string) string {
+	base := strings.TrimSpace(path)
+	if !strings.HasPrefix(base, "file:") {
+		base = "file:" + base
 	}
 
-	return db, nil
+	u, err := url.Parse(base)
+	if err != nil {
+		return base
+	}
+
+	q := u.Query()
+	q.Add("_pragma", "journal_mode(WAL)")
+	q.Add("_pragma", "busy_timeout(5000)")
+	q.Add("_pragma", "foreign_keys(ON)")
+	u.RawQuery = q.Encode()
+	return u.String()
 }
